@@ -1,17 +1,22 @@
+
+
+
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import getStripe from "@/utils/get-stripe";
 import { useSearchParams } from "next/navigation";
-import { CircularProgress, Container, Typography } from "@mui/material";
+import { CircularProgress, Container, Typography, Box } from "@mui/material";
 
 const ResultPage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const session_id = searchParams.get("session_id");
-  const { loading, setLoading } = useState(true);
-  const { session, setSession } = useState(null);
-  const { error, setError } = useState(null);
+
+  // Separate useState calls for each state variable
+  const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchCheckoutSession = async () => {
@@ -25,10 +30,10 @@ const ResultPage = () => {
         if (res.ok) {
           setSession(sessionData);
         } else {
-          setError(sessionData.error);
+          setError(sessionData.error || "Failed to fetch session data");
         }
       } catch (err) {
-        console.log(err)
+        console.log(err);
         setError("An error occurred");
       } finally {
         setLoading(false);
@@ -65,6 +70,7 @@ const ResultPage = () => {
       </Container>
     );
   }
+
   return (
     <Container
       maxWidth="100vw"
@@ -73,9 +79,9 @@ const ResultPage = () => {
         mt: 4,
       }}
     >
-      {session.payment_status === "paid" ? (
+      {session?.payment_status === "paid" ? (
         <>
-          <Typography variant="h4">Thank you for purchasing</Typography>
+          <Typography variant="h4">Thank you for your purchase</Typography>
           <Box sx={{ mt: 2 }}>
             <Typography variant="h6">Session ID: {session_id}</Typography>
             <Typography variant="body1">
@@ -86,16 +92,16 @@ const ResultPage = () => {
         </>
       ) : (
         <>
-        <Typography variant="h4">Payment failed</Typography>
-        <Box sx={{mt: 2}}>
-          <Typography variant="body1">
-            Your payment was not successful. Please try again.
-          </Typography>
-        </Box>
-        
+          <Typography variant="h4">Payment failed</Typography>
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="body1">
+              Your payment was not successful. Please try again.
+            </Typography>
+          </Box>
         </>
       )}
     </Container>
   );
 };
+
 export default ResultPage;
