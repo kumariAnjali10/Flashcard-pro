@@ -1,29 +1,27 @@
-"use client"
-import { useUser } from "@clerk/nextjs"
-import { useState } from "react"
-import { doc, collection, getDoc, writeBatch } from "firebase/firestore"
-import { db } from "@/firebase"
-import { Box, Button, Card, CardActionArea, CardContent, Container, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Grid, Paper, TextField, Typography } from "@mui/material"
+"use client";
+import { useUser } from "@clerk/nextjs";
+import { useState } from "react";
+import { doc, collection, getDoc, writeBatch } from "firebase/firestore";
+import { db } from "@/firebase";
+import { Box, Button, Card, CardActionArea, CardContent, Container, Grid, Paper, TextField, Typography } from "@mui/material";
 
 export default function Generate() {
-    const { isLoaded, isSignedIn, user } = useUser()
-    const [flashcards, setFlashcards] = useState([])
-    const [flipped, setFlipped] = useState([])
-    const [text, setText] = useState('')
-    const [name, setName] = useState('')
-    const [open, setOpen] = useState(false)
+    const { isLoaded, isSignedIn, user } = useUser();
+    const [flashcards, setFlashcards] = useState([]);
+    const [flipped, setFlipped] = useState([]);
+    const [text, setText] = useState('');
 
     const handleSubmit = async () => {
         try {
             const res = await fetch('/api/generate', {
                 method: 'POST',
-                body: JSON.stringify({ text }),  // Assuming Cloudflare Worker processes this format
+                body: JSON.stringify({ text }), 
                 headers: {
                     'Content-Type': 'application/json',
                 },
             });
             const data = await res.json();
-            setFlashcards(data.flashcards || []);  // Make sure the API returns `flashcards`
+            setFlashcards(data.flashcards || []); 
         } catch (error) {
             console.error('Error fetching flashcards:', error);
             alert('Failed to generate flashcards.');
@@ -37,24 +35,7 @@ export default function Generate() {
         }));
     };
 
-    const handleOpen = () => {
-        if (!isSignedIn) {
-            alert('You must be signed in to save flashcards.');
-            return;
-        }
-        setOpen(true);
-    };
-
-    const handleClose = () => {
-        setOpen(false);
-    };
-
     const saveFlashcards = async () => {
-        if (!name) {
-            alert('Please enter a name');
-            return;
-        }
-
         if (!isSignedIn || !user) {
             alert('You must be signed in to save flashcards.');
             return;
@@ -68,26 +49,18 @@ export default function Generate() {
             let collections = [];
             if (docSnap.exists()) {
                 collections = docSnap.data().flashcards || [];
-                if (collections.find((f) => f.name === name)) {
-                    alert('Flashcard collection with the same name already exists.');
-                    return;
-                }
             }
-            collections.push({ name });
+            collections.push({ name: text });
             batch.set(userDocRef, { flashcards: collections }, { merge: true });
 
-            const colRef = collection(userDocRef, name);
+            const colRef = collection(userDocRef, text);
             flashcards.forEach((flashcard) => {
                 const cardDocRef = doc(colRef);
                 batch.set(cardDocRef, flashcard);
             });
 
             await batch.commit();
-            handleClose();
-
-            // Optionally clear flashcards and name state
             setFlashcards([]);
-            setName('');
             setText('');
             alert('Flashcards saved successfully!');
         } catch (error) {
@@ -112,7 +85,7 @@ export default function Generate() {
                         sx={{ mb: 2 }}
                     />
                     <Button variant="contained" color="primary" onClick={handleSubmit} fullWidth>
-                        Submit
+                        Generate Flashcards
                     </Button>
                 </Paper>
             </Box>
@@ -132,7 +105,7 @@ export default function Generate() {
                                                     transformStyle: 'preserve-3d',
                                                     position: 'relative',
                                                     width: '100%',
-                                                    height: '400px',
+                                                    height: '200px',
                                                     boxShadow: '0 4px 8px 0 rgba(0,0,0,0.2)',
                                                     transform: flipped[index] ? 'rotateY(180deg)' : 'rotateY(0deg)',
                                                 },
@@ -153,11 +126,13 @@ export default function Generate() {
                                             }}>
                                                 <div>
                                                     <div>
+                                                        <Typography variant="h6">Front:</Typography>
                                                         <Typography variant="h5" component="div">
                                                             {flashcard.front}
                                                         </Typography>
                                                     </div>
                                                     <div>
+                                                        <Typography variant="h6" sx={{ mt: 2 }}>Back:</Typography>
                                                         <Typography variant="h5" component="div">
                                                             {flashcard.back}
                                                         </Typography>
@@ -171,35 +146,12 @@ export default function Generate() {
                         ))}
                     </Grid>
                     <Box sx={{ mt: 6, display: 'flex', justifyContent: 'center' }}>
-                        <Button variant="contained" color="primary" onClick={handleOpen}>
-                            Save
+                        <Button variant="contained" color="primary" onClick={saveFlashcards}>
+                            Save Flashcards
                         </Button>
                     </Box>
                 </Box>
             )}
-            <Dialog open={open} onClose={handleClose}>
-                <DialogTitle>Save Flashcards</DialogTitle>
-                <DialogContent>
-                    <DialogContentText>
-                        Please enter a name for your flashcards collection.
-                    </DialogContentText>
-                    <TextField
-                        autoFocus
-                        margin="dense"
-                        label="Collection Name"
-                        type="text"
-                        fullWidth
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        variant="outlined"
-                    />
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleClose}>Cancel</Button>
-                    <Button onClick={saveFlashcards}>Save</Button>
-                </DialogActions>
-            </Dialog>
         </Container>
     );
 }
-
