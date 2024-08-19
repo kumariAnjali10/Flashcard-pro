@@ -1,489 +1,205 @@
-
-
-'use client'
-
-import { useState } from 'react'
-import {
-  Container,
-  TextField,
-  Button,
-  Typography,
-  Box,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
-  Grid,
-  Card,
-  CardContent,
-} from '@mui/material'
-import styled from '@emotion/styled'
-import { red } from '@mui/material/colors'
+"use client"
+import { useUser } from "@clerk/nextjs"
+import { useState } from "react"
+import { doc, collection, getDoc, writeBatch } from "firebase/firestore"
+import { db } from "@/firebase"
+import { Box, Button, Card, CardActionArea, CardContent, Container, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Grid, Paper, TextField, Typography } from "@mui/material"
 
 export default function Generate() {
-  const [text, setText] = useState('')
-  const [flashcards, setFlashcards] = useState([])
-  const [setName, setSetName] = useState('')
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const handleOpenDialog = () => setDialogOpen(true)
-  const handleCloseDialog = () => setDialogOpen(false)
+    const { isLoaded, isSignedIn, user } = useUser()
+    const [flashcards, setFlashcards] = useState([])
+    const [flipped, setFlipped] = useState([])
+    const [text, setText] = useState('')
+    const [name, setName] = useState('')
+    const [open, setOpen] = useState(false)
 
+    const handleSubmit = async () => {
+        try {
+            const res = await fetch('/api/generate', {
+                method: 'POST',
+                body: JSON.stringify({ text }),  // Assuming Cloudflare Worker processes this format
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            });
+            const data = await res.json();
+            setFlashcards(data.flashcards || []);  // Make sure the API returns `flashcards`
+        } catch (error) {
+            console.error('Error fetching flashcards:', error);
+            alert('Failed to generate flashcards.');
+        }
+    };
 
-  //THIS IS API STUFF, COULDNT CONNECT WITH API CUZ I HAD TO PAY
-//   const saveFlashcards = async () => {
-//     if (!setName.trim()) {
-//       alert('Please enter a name for your flashcard set.')
-//       return
-//     }
-  
-//     try {
-//       const userDocRef = doc(collection(db, 'users'), user.id)
-//       const userDocSnap = await getDoc(userDocRef)
-  
-//       const batch = writeBatch(db)
-  
-//       if (userDocSnap.exists()) {
-//         const userData = userDocSnap.data()
-//         const updatedSets = [...(userData.flashcardSets || []), { name: setName }]
-//         batch.update(userDocRef, { flashcardSets: updatedSets })
-//       } else {
-//         batch.set(userDocRef, { flashcardSets: [{ name: setName }] })
-//       }
-  
-//       const setDocRef = doc(collection(userDocRef, 'flashcardSets'), setName)
-//       batch.set(setDocRef, { flashcards })
-  
-//       await batch.commit()
-  
-//       alert('Flashcards saved successfully!')
-//       handleCloseDialog()
-//       setSetName('')
-//     } catch (error) {
-//       console.error('Error saving flashcards:', error)
-//       alert('An error occurred while saving flashcards. Please try again.')
-//     }
-//   }
+    const handleCardClick = (id) => {
+        setFlipped((prev) => ({
+            ...prev,
+            [id]: !prev[id],
+        }));
+    };
 
-//   const handleSubmit = async () => {
-//     // We'll implement the API call here
-//     if (!text.trim()) {
-//         alert('Please enter some text to generate flashcards.')
-//         return
-//       }
-    
-//       try {
-//         const response = await fetch('/api/generate', {
-//           method: 'POST',
-//           body: text,
-//         })
-    
-//         if (!response.ok) {
-//           throw new Error('Failed to generate flashcards')
-//         }
-    
-//         const data = await response.json()
-//         setFlashcards(data)
-//       } catch (error) {
-//         console.error('Error generating flashcards:', error)
-//         alert('An error occurred while generating flashcards. Please try again.')
-//       }
-//     }
+    const handleOpen = () => {
+        if (!isSignedIn) {
+            alert('You must be signed in to save flashcards.');
+            return;
+        }
+        setOpen(true);
+    };
 
-// KIWI: Replace with API 
-const saveFlashcards = async () => {
-    if (!setName.trim()) {
-      alert('Please enter a name for your flashcard set.');
-      return;
-    }
+    const handleClose = () => {
+        setOpen(false);
+    };
 
-    try {
-      // Simulate saving flashcards without any API calls
-      alert('Flashcards saved successfully!');
-      handleCloseDialog();
-      setSetName('');
-    } catch (error) {
-      console.error('Error saving flashcards:', error);
-      alert('An error occurred while saving flashcards. Please try again.');
-    }
-  };
+    const saveFlashcards = async () => {
+        if (!name) {
+            alert('Please enter a name');
+            return;
+        }
 
-    //KIWI: Replace with API
-  const handleSubmit = () => {
-    if (!text.trim()) {
-      alert('Please enter some text to generate flashcards.');
-      return;
-    }
+        if (!isSignedIn || !user) {
+            alert('You must be signed in to save flashcards.');
+            return;
+        }
 
-    const generatedFlashcards = [
-      { front: 'What is React?', back: 'A JavaScript library for building user interfaces.' },
-      { front: 'What is JSX?', back: 'A syntax extension for JavaScript that looks similar to XML or HTML.' },
-      { front: 'What is a component in React?', back: 'A reusable piece of UI that can be nested, managed, and handled independently.' },
-    ];
+        const batch = writeBatch(db);
+        const userDocRef = doc(collection(db, 'users'), user.id);
 
-    setFlashcards(generatedFlashcards);
-  };
+        try {
+            const docSnap = await getDoc(userDocRef);
+            let collections = [];
+            if (docSnap.exists()) {
+                collections = docSnap.data().flashcards || [];
+                if (collections.find((f) => f.name === name)) {
+                    alert('Flashcard collection with the same name already exists.');
+                    return;
+                }
+            }
+            collections.push({ name });
+            batch.set(userDocRef, { flashcards: collections }, { merge: true });
 
-  const Flashcard = styled('div')({
-    perspective: '1000px',
-    width: '100%',
-    height: '100%',
-  });
+            const colRef = collection(userDocRef, name);
+            flashcards.forEach((flashcard) => {
+                const cardDocRef = doc(colRef);
+                batch.set(cardDocRef, flashcard);
+            });
 
-  const FlashcardInner = styled('div')({
-    position: 'relative',
-    width: '100%',
-    height: '100%',
-    transition: 'transform 0.6s',
-    transformStyle: 'preserve-3d',
-    '&:hover': {
-      transform: 'rotateY(180deg)',
-    },
-  });
+            await batch.commit();
+            handleClose();
 
-  const FlashcardFace = styled('div')(({ theme }) => ({
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
-    backfaceVisibility: 'hidden',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: '24px',
-    borderRadius: '15px',
-    boxShadow: '0px 6px 20px rgba(0, 0, 0, 0.1)',
-    fontSize: '2.25rem',
-    fontWeight: '500',
-    transition: 'transform 0.6s ease, background-color 0.3s ease',
-  }));
+            // Optionally clear flashcards and name state
+            setFlashcards([]);
+            setName('');
+            setText('');
+            alert('Flashcards saved successfully!');
+        } catch (error) {
+            console.error('Error saving flashcards:', error);
+            alert('An error occurred while saving flashcards.');
+        }
+    };
 
-  const FlashcardFront = styled(FlashcardFace)({
-    backgroundColor: '#1976d2', 
-    color: '#fff',
-    backgroundImage: 'linear-gradient(135deg, #1976d2 0%, #63a4ff 100%)', 
-    fontSize: '5rem'
-  });
-  
-  const FlashcardBack = styled(FlashcardFace)({
-    backgroundColor: '#115293', 
-    color: '#fff',
-    backgroundImage: 'linear-gradient(135deg, #115293 0%, #1976d2 100%)', 
-    transform: 'rotateY(180deg)',
-  });
-  
-  const FlashcardContainer = styled('div')({
-    width: '320px',
-    height: '250px',
-    margin: '0 auto',
-    borderRadius: '15px',
-    overflow: 'hidden',
-    cursor: 'pointer',
-  });
-
-  const CardGrid = styled(Grid)({
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-  });
-
-  return (
-    <Container maxWidth="md">
-      <Box sx={{ my: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          Generate Flashcards
-        </Typography>
-        <TextField
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          label="Enter text"
-          fullWidth
-          multiline
-          rows={4}
-          variant="outlined"
-          sx={{ mb: 2 }}
-        />
-        <Button variant="contained" color="primary" onClick={handleSubmit} fullWidth>
-          Generate Flashcards
-        </Button>
-      </Box>
-      {flashcards.length > 0 && (
-        <Box sx={{ mt: 4 }}>
-          <Typography variant="h5" component="h2" gutterBottom>
-            Generated Flashcards
-          </Typography>
-          <Grid container spacing={4}>
-            {flashcards.map((flashcard, index) => (
-              <CardGrid item xs={12} sm={6} md={4} key={index}>
-                <FlashcardContainer>
-                  <Flashcard>
-                    <FlashcardInner>
-                      <FlashcardFront>
-                        <Typography variant="h6" sx={{ fontWeight: '600' }}></Typography>
-                        <Typography>{flashcard.front}</Typography>
-                      </FlashcardFront>
-                      <FlashcardBack>
-                        <Typography variant="h6" sx={{ fontWeight: '650' }}></Typography>
-                        <Typography>{flashcard.back}</Typography>
-                      </FlashcardBack>
-                    </FlashcardInner>
-                  </Flashcard>
-                </FlashcardContainer>
-              </CardGrid>
-            ))}
-          </Grid>
-          {flashcards.length > 0 && (
-            <Box sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
-              <Button variant="contained" color="primary" onClick={handleOpenDialog}>
-                Save Flashcards
-              </Button>
+    return (
+        <Container maxWidth="md">
+            <Box sx={{ mt: 4, mb: 6, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <Typography variant="h4">Generate Flashcards</Typography>
+                <Paper sx={{ p: 4, width: "100%" }}>
+                    <TextField
+                        value={text}
+                        onChange={(e) => setText(e.target.value)}
+                        label="Enter Text"
+                        fullWidth
+                        multiline
+                        rows={4}
+                        variant="outlined"
+                        sx={{ mb: 2 }}
+                    />
+                    <Button variant="contained" color="primary" onClick={handleSubmit} fullWidth>
+                        Submit
+                    </Button>
+                </Paper>
             </Box>
-          )}
-        </Box>
-      )}
-      <Dialog open={dialogOpen} onClose={handleCloseDialog}>
-        <DialogTitle>Save Flashcard Set</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Please enter a name for your flashcard set.
-          </DialogContentText>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Set Name"
-            type="text"
-            fullWidth
-            value={setName}
-            onChange={(e) => setSetName(e.target.value)}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button onClick={saveFlashcards} color="primary">
-            Save
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Container>
-  );
+            {flashcards.length > 0 && (
+                <Box sx={{ mt: 4 }}>
+                    <Typography variant="h5">Flashcards Preview</Typography>
+                    <Grid container spacing={3}>
+                        {flashcards.map((flashcard, index) => (
+                            <Grid item xs={12} sm={6} md={4} key={index}>
+                                <Card>
+                                    <CardActionArea onClick={() => handleCardClick(index)}>
+                                        <CardContent>
+                                            <Box sx={{
+                                                perspective: '1000px',
+                                                '& > div': {
+                                                    transition: 'transform 0.6s',
+                                                    transformStyle: 'preserve-3d',
+                                                    position: 'relative',
+                                                    width: '100%',
+                                                    height: '400px',
+                                                    boxShadow: '0 4px 8px 0 rgba(0,0,0,0.2)',
+                                                    transform: flipped[index] ? 'rotateY(180deg)' : 'rotateY(0deg)',
+                                                },
+                                                '& > div > div': {
+                                                    position: 'absolute',
+                                                    width: '100%',
+                                                    height: '100%',
+                                                    backfaceVisibility: "hidden",
+                                                    display: 'flex',
+                                                    justifyContent: 'center',
+                                                    alignItems: 'center',
+                                                    padding: 2,
+                                                    boxSizing: 'border-box'
+                                                },
+                                                '& > div > div:nth-of-type(2)': {
+                                                    transform: 'rotateY(180deg)'
+                                                },
+                                            }}>
+                                                <div>
+                                                    <div>
+                                                        <Typography variant="h5" component="div">
+                                                            {flashcard.front}
+                                                        </Typography>
+                                                    </div>
+                                                    <div>
+                                                        <Typography variant="h5" component="div">
+                                                            {flashcard.back}
+                                                        </Typography>
+                                                    </div>
+                                                </div>
+                                            </Box>
+                                        </CardContent>
+                                    </CardActionArea>
+                                </Card>
+                            </Grid>
+                        ))}
+                    </Grid>
+                    <Box sx={{ mt: 6, display: 'flex', justifyContent: 'center' }}>
+                        <Button variant="contained" color="primary" onClick={handleOpen}>
+                            Save
+                        </Button>
+                    </Box>
+                </Box>
+            )}
+            <Dialog open={open} onClose={handleClose}>
+                <DialogTitle>Save Flashcards</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        Please enter a name for your flashcards collection.
+                    </DialogContentText>
+                    <TextField
+                        autoFocus
+                        margin="dense"
+                        label="Collection Name"
+                        type="text"
+                        fullWidth
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        variant="outlined"
+                    />
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleClose}>Cancel</Button>
+                    <Button onClick={saveFlashcards}>Save</Button>
+                </DialogActions>
+            </Dialog>
+        </Container>
+    );
 }
-//-=======================================================================================================================
 
-// 'use client'
-
-// import { useState } from 'react'
-// import {
-//   Container,
-//   TextField,
-//   Button,
-//   Typography,
-//   Box,
-//   Dialog,
-//   DialogTitle,
-//   DialogContent,
-//   DialogContentText,
-//   DialogActions,
-//   Grid,
-// } from '@mui/material'
-// import styled from '@emotion/styled'
-
-// export default function Generate() {
-//   const [text, setText] = useState('')
-//   const [flashcards, setFlashcards] = useState([])
-//   const [setName, setSetName] = useState('')
-//   const [dialogOpen, setDialogOpen] = useState(false)
-
-//   // Dialog open and close handlers
-//   const handleOpenDialog = () => setDialogOpen(true)
-//   const handleCloseDialog = () => setDialogOpen(false)
-
-//   // Function to generate flashcards using the backend API
-//   const handleSubmit = async () => {
-//     if (!text.trim()) {
-//       alert('Please enter some text to generate flashcards.')
-//       return
-//     }
-
-//     try {
-//       const response = await fetch('/api/generate', {
-//         method: 'POST',
-//         headers: {
-//           'Content-Type': 'application/json',
-//         },
-//         body: JSON.stringify({ text }), // Sending the input text to the backend
-//       })
-
-//       if (!response.ok) {
-//         throw new Error('Failed to generate flashcards')
-//       }
-
-//       const data = await response.json()
-//       setFlashcards(data.flashcards) // Assuming the API returns flashcards in this format
-//     } catch (error) {
-//       console.error('Error generating flashcards:', error)
-//       alert('An error occurred while generating flashcards. Please try again.')
-//     }
-//   }
-
-//   // Function to save flashcards using the backend API
-//   const saveFlashcards = async () => {
-//     if (!setName.trim()) {
-//       alert('Please enter a name for your flashcard set.')
-//       return
-//     }
-
-//     try {
-//       const response = await fetch('/api/save-flashcards', {
-//         method: 'POST',
-//         headers: {
-//           'Content-Type': 'application/json',
-//         },
-//         body: JSON.stringify({ setName, flashcards }), // Sending setName and flashcards to the backend
-//       })
-
-//       if (!response.ok) {
-//         throw new Error('Failed to save flashcards')
-//       }
-
-//       alert('Flashcards saved successfully!')
-//       handleCloseDialog()
-//       setSetName('')
-//     } catch (error) {
-//       console.error('Error saving flashcards:', error)
-//       alert('An error occurred while saving flashcards. Please try again.')
-//     }
-//   }
-
-//   // Styled components for flashcards
-//   const Flashcard = styled('div')({
-//     perspective: '1000px',
-//     width: '100%',
-//     height: '100%',
-//   })
-
-//   const FlashcardInner = styled('div')({
-//     position: 'relative',
-//     width: '100%',
-//     height: '100%',
-//     transition: 'transform 0.6s',
-//     transformStyle: 'preserve-3d',
-//     '&:hover': {
-//       transform: 'rotateY(180deg)',
-//     },
-//   })
-
-//   const FlashcardFace = styled('div')({
-//     position: 'absolute',
-//     width: '100%',
-//     height: '100%',
-//     backfaceVisibility: 'hidden',
-//     display: 'flex',
-//     justifyContent: 'center',
-//     alignItems: 'center',
-//     padding: '24px',
-//     borderRadius: '15px',
-//     boxShadow: '0px 6px 20px rgba(0, 0, 0, 0.1)',
-//     fontSize: '1.5rem',
-//     fontWeight: '500',
-//     transition: 'transform 0.6s ease, background-color 0.3s ease',
-//   })
-
-//   const FlashcardFront = styled(FlashcardFace)({
-//     backgroundColor: '#1976d2',
-//     color: '#fff',
-//     backgroundImage: 'linear-gradient(135deg, #1976d2 0%, #63a4ff 100%)',
-//   })
-
-//   const FlashcardBack = styled(FlashcardFace)({
-//     backgroundColor: '#115293',
-//     color: '#fff',
-//     backgroundImage: 'linear-gradient(135deg, #115293 0%, #1976d2 100%)',
-//     transform: 'rotateY(180deg)',
-//   })
-
-//   const FlashcardContainer = styled('div')({
-//     width: '320px',
-//     height: '250px',
-//     margin: '0 auto',
-//     borderRadius: '15px',
-//     overflow: 'hidden',
-//     cursor: 'pointer',
-//   })
-
-//   return (
-//     <Container maxWidth="md">
-//       <Box sx={{ my: 4 }}>
-//         <Typography variant="h4" component="h1" gutterBottom>
-//           Generate Flashcards
-//         </Typography>
-//         <TextField
-//           value={text}
-//           onChange={(e) => setText(e.target.value)}
-//           label="Enter text"
-//           fullWidth
-//           multiline
-//           rows={4}
-//           variant="outlined"
-//           sx={{ mb: 2 }}
-//         />
-//         <Button variant="contained" color="primary" onClick={handleSubmit} fullWidth>
-//           Generate Flashcards
-//         </Button>
-//       </Box>
-
-//       {flashcards.length > 0 && (
-//         <Box sx={{ mt: 4 }}>
-//           <Typography variant="h5" component="h2" gutterBottom>
-//             Generated Flashcards
-//           </Typography>
-//           <Grid container spacing={4}>
-//             {flashcards.map((flashcard, index) => (
-//               <Grid item xs={12} sm={6} md={4} key={index} sx={{ display: 'flex', justifyContent: 'center' }}>
-//                 <FlashcardContainer>
-//                   <Flashcard>
-//                     <FlashcardInner>
-//                       <FlashcardFront>
-//                         <Typography>{flashcard.front}</Typography>
-//                       </FlashcardFront>
-//                       <FlashcardBack>
-//                         <Typography>{flashcard.back}</Typography>
-//                       </FlashcardBack>
-//                     </FlashcardInner>
-//                   </Flashcard>
-//                 </FlashcardContainer>
-//               </Grid>
-//             ))}
-//           </Grid>
-//           <Box sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
-//             <Button variant="contained" color="primary" onClick={handleOpenDialog}>
-//               Save Flashcards
-//             </Button>
-//           </Box>
-//         </Box>
-//       )}
-
-//       <Dialog open={dialogOpen} onClose={handleCloseDialog}>
-//         <DialogTitle>Save Flashcard Set</DialogTitle>
-//         <DialogContent>
-//           <DialogContentText>
-//             Please enter a name for your flashcard set.
-//           </DialogContentText>
-//           <TextField
-//             autoFocus
-//             margin="dense"
-//             label="Set Name"
-//             type="text"
-//             fullWidth
-//             value={setName}
-//             onChange={(e) => setSetName(e.target.value)}
-//           />
-//         </DialogContent>
-//         <DialogActions>
-//           <Button onClick={handleCloseDialog}>Cancel</Button>
-//           <Button onClick={saveFlashcards} color="primary">
-//             Save
-//           </Button>
-//         </DialogActions>
-//       </Dialog>
-//     </Container>
-//   )
-// }
